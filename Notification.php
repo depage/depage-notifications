@@ -20,6 +20,7 @@ class Notification extends \Depage\Entity\Entity
         "title" => "",
         "message" => "",
         "options" => "",
+        "delivery" => "",
         "date" => null,
     );
 
@@ -60,20 +61,26 @@ class Notification extends \Depage\Entity\Entity
      * @param       Depage\Db\Pdo     $pdo        pdo object for database access
      * @param       String            $sid        sid of the user
      * @param       String            $tag        tag with which to filter the notifications. SQL wildcards % and _ are allowed to match substrings.
+     * @param       String            $delivery   delivery method that notification has to have
      *
      * @return      auth_user
      */
-    static public function loadBySid($pdo, $sid, $tag = null) {
+    static public function loadBySid($pdo, $sid, $tag = null, $delivery = null) {
         $fields = "n." . implode(", n.", self::getFields());
         $tagQuery = "";
+        $deliveryQuery = "";
         $params = array(
             ':sid1' => $sid,
             ':sid2' => $sid,
         );
 
-        if ($tag) {
+        if (!is_null($tag)) {
             $tagQuery = " AND tag LIKE :tag";
             $params[':tag'] = $tag;
+        }
+        if (!is_null($delivery)) {
+            $deliveryQuery = " AND delivery LIKE CONCAT('%,', :delivery, ',%')";
+            $params[':delivery'] = $delivery;
         }
 
         $query = $pdo->prepare(
@@ -86,6 +93,7 @@ class Notification extends \Depage\Entity\Entity
                 (n.sid = :sid1 OR
                 (s.sid = :sid2 AND n.uid = s.userId))
                 $tagQuery
+                $deliveryQuery
             ORDER BY n.id"
         );
         $query->execute($params);
@@ -106,12 +114,18 @@ class Notification extends \Depage\Entity\Entity
      * @param       Depage\Db\Pdo     $pdo        pdo object for database access
      * @param       String            $tag        tag with which to filter the notifications. SQL wildcards % and _ are allowed to match substrings.
      */
-    static public function loadByTag($pdo, $tag) {
+    static public function loadByTag($pdo, $tag, $delivery = null) {
         $fields = "n." . implode(", n.", self::getFields());
         $tagQuery = "";
+        $deliveryQuery = "";
 
         $tagQuery = "tag LIKE :tag";
         $params[':tag'] = $tag;
+
+        if (!is_null($delivery)) {
+            $deliveryQuery = " AND delivery LIKE CONCAT('%,', :delivery, ',%')";
+            $params[':delivery'] = $delivery;
+        }
 
         $query = $pdo->prepare(
             "SELECT $fields
@@ -119,6 +133,7 @@ class Notification extends \Depage\Entity\Entity
                 {$pdo->prefix}_notifications AS n
             WHERE
                 $tagQuery
+                $deliveryQuery
             ORDER BY n.id"
         );
         $query->execute($params);
@@ -165,6 +180,89 @@ class Notification extends \Depage\Entity\Entity
     }
     // }}}
 
+    // {{{ setDelivery()
+    /**
+     * @brief setDelivery
+     *
+     * @param mixed $param
+     * @return void
+     **/
+    public function setDelivery($param)
+    {
+        if (!$this->initialized) {
+            $this->data['delivery'] = $param;
+        } else {
+            $this->data['delivery'] = "," . implode(",", $param) . ",";
+            $this->dirty['delivery'] = true;
+        }
+    }
+    // }}}
+    // {{{ getDelivery()
+    /**
+     * @brief getDelivery
+     *
+     * @param mixed
+     * @return void
+     **/
+    public function getDelivery()
+    {
+        if (!empty($this->data['delivery'])) {
+            return explode(",", trim($this->data['delivery'], ","));
+        } else {
+            return [];
+        }
+    }
+    // }}}
+    // {{{ addDelivery()
+    /**
+     * @brief adds a delivery method through which the notification should be delivered
+     *
+     * @param mixed $
+     * @return void
+     **/
+    public function addDelivery($method)
+    {
+        $delivery = $this->delivery;
+
+        $delivery[] = $method;
+        array_unique($delivery);
+
+        $this->delivery = $delivery;
+
+        return $this;
+    }
+    // }}}
+    // {{{ delivered()
+    /**
+     * @brief marks a delivery method as delivered and deletes notifications if no delivery methods are left
+     *
+     * @param mixed $
+     * @return void
+     **/
+    public function delivered($method)
+    {
+        $delivery = $this->delivery;
+
+        $index = array_search($method, $delivery);
+        if ($index !== false) {
+            array_splice($delivery, $index, 1);
+
+            $this->delivery = $delivery;
+        }
+
+        if (count($delivery) == 0) {
+            $this->delete();
+
+            return null;
+        }
+        if (count($delivery) > 0) {
+            $this->save();
+
+            return $this;
+        }
+    }
+    // }}}
+
     // {{{ save()
     /**
      * save a notification object
@@ -204,7 +302,7 @@ class Notification extends \Depage\Entity\Entity
             $success = $cmd->execute($params);
 
             if ($isNew) {
-                $this->$primary = $this->pdo->lastInsertId();
+                $this->data[$primary] = $this->pdo->lastInsertId();
             }
 
             if ($success) {
