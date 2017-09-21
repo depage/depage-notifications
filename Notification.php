@@ -5,8 +5,10 @@ namespace Depage\Notifications;
 /**
  * brief Notfication
  * Class Notfication
+ *
+ * @todo add option for sms gateway?
  */
-class Notification extends \Depage\Entity\Entity
+class Notification extends \Depage\Entity\PdoEntity
 {
     // {{{ variables
     /**
@@ -20,7 +22,7 @@ class Notification extends \Depage\Entity\Entity
         "title" => "",
         "message" => "",
         "options" => "",
-        "delivery" => "",
+        "delivery" => ",notification,",
         "date" => null,
     );
 
@@ -66,43 +68,11 @@ class Notification extends \Depage\Entity\Entity
      * @return      auth_user
      */
     static public function loadBySid($pdo, $sid, $tag = null, $delivery = null) {
-        $fields = "n." . implode(", n.", self::getFields());
-        $tagQuery = "";
-        $deliveryQuery = "";
-        $params = array(
-            ':sid1' => $sid,
-            ':sid2' => $sid,
-        );
-
-        if (!is_null($tag)) {
-            $tagQuery = " AND tag LIKE :tag";
-            $params[':tag'] = $tag;
-        }
-        if (!is_null($delivery)) {
-            $deliveryQuery = " AND delivery LIKE CONCAT('%,', :delivery, ',%')";
-            $params[':delivery'] = $delivery;
-        }
-
-        $query = $pdo->prepare(
-            "SELECT $fields
-            FROM
-                {$pdo->prefix}_notifications AS n LEFT JOIN
-                {$pdo->prefix}_auth_sessions AS s
-            ON n.uid = s.userId
-            WHERE
-                (n.sid = :sid1 OR
-                (s.sid = :sid2 AND n.uid = s.userId))
-                $tagQuery
-                $deliveryQuery
-            ORDER BY n.id"
-        );
-        $query->execute($params);
-
-        // pass pdo-instance to constructor
-        $query->setFetchMode(\PDO::FETCH_CLASS, get_called_class(), array($pdo));
-        $n = $query->fetchAll();
-
-        return $n;
+        return self::loadBy($pdo, [
+            'sid' => $sid,
+            'tag' => $tag,
+            'delivery' => $delivery,
+        ]);
     }
     // }}}
     // {{{ loadByTag()
@@ -115,34 +85,81 @@ class Notification extends \Depage\Entity\Entity
      * @param       String            $tag        tag with which to filter the notifications. SQL wildcards % and _ are allowed to match substrings.
      */
     static public function loadByTag($pdo, $tag, $delivery = null) {
+        return self::loadBy($pdo, [
+            'tag' => $tag,
+            'delivery' => $delivery,
+        ]);
+    }
+    // }}}
+    // {{{ loadBy()
+    /**
+     * @brief loadBy
+     *
+     * @param mixed $param
+     * @return void
+     **/
+    static public function loadBy($pdo, Array $search, Array $order = [])
+    {
+        $notifications = [];
         $fields = "n." . implode(", n.", self::getFields());
-        $tagQuery = "";
-        $deliveryQuery = "";
+        $where = [];
+        $params = [];
+        $groupBy = "";
+        $orderBy = "";
+        $join = "";
 
-        $tagQuery = "tag LIKE :tag";
-        $params[':tag'] = $tag;
-
-        if (!is_null($delivery)) {
-            $deliveryQuery = " AND delivery LIKE CONCAT('%,', :delivery, ',%')";
-            $params[':delivery'] = $delivery;
+        // extract where part of query
+        if (isset($search['sid'])) {
+            $where[] = "(n.sid = :sid1 OR
+                (s.sid = :sid2 AND n.uid = s.userId))";
+            $params["sid1"] = $search['sid'];
+            $params["sid2"] = $search['sid'];
+            $join .= "LEFT JOIN {$pdo->prefix}_auth_sessions AS s ON n.uid = s.userId";
+        }
+        if (!empty($search['tag'])) {
+            $where[] = "n.tag LIKE :tag";
+            $params["tag"] = $search['tag'];
+        }
+        if (!empty($search['delivery'])) {
+            $where[] = "delivery LIKE CONCAT('%,', :delivery, ',%')";
+            $params['delivery'] = $search['delivery'];
         }
 
-        $query = $pdo->prepare(
+        if (!empty($where)) {
+            $where = "WHERE " . implode($where, " AND ");
+        } else {
+            $where = "";
+        };
+
+        // extract order part of query
+        if (!empty($order)) {
+            $orderBy = "ORDER BY " . implode(", ", $order);
+        }
+
+        $sql =
             "SELECT $fields
             FROM
                 {$pdo->prefix}_notifications AS n
-            WHERE
-                $tagQuery
-                $deliveryQuery
-            ORDER BY n.id"
-        );
+                $join
+            $where
+            $groupBy
+            $orderBy";
+        echo(htmlspecialchars($sql));
+        $query = $pdo->prepare($sql);
         $query->execute($params);
 
         // pass pdo-instance to constructor
-        $query->setFetchMode(\PDO::FETCH_CLASS, get_called_class(), array($pdo));
-        $n = $query->fetchAll();
+        $query->setFetchMode(\PDO::FETCH_CLASS, get_called_class(), [$pdo]);
 
-        return $n;
+        do {
+            $notification = $query->fetch(\PDO::FETCH_CLASS);
+            if ($notification) {
+                $notification->onLoad();
+                $notifications[] = $notification;
+            }
+        } while ($notification);
+
+        return $notifications;
     }
     // }}}
 
