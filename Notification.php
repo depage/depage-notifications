@@ -365,7 +365,7 @@ class Notification extends \Depage\Entity\PdoEntity
 
             if (in_array("mail", $this->delivery)) {
                 $delivery = new \Depage\Notifications\MailDelivery($this->pdo, "notifications@scriptdock.de");
-                $delivery->addDeliveryTask();
+                $delivery->addDeliveryTask($this->id);
             }
         }
     }
