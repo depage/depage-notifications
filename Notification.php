@@ -54,6 +54,26 @@ class Notification extends \Depage\Entity\PdoEntity
     }
     // }}}
 
+    // {{{ loadById()
+    /**
+     * gets a notifications by sid for a specific user
+     *
+     * @public
+     *
+     * @param       Depage\Db\Pdo     $pdo        pdo object for database access
+     * @param       String            $sid        sid of the user
+     * @param       String            $tag        tag with which to filter the notifications. SQL wildcards % and _ are allowed to match substrings.
+     * @param       String            $delivery   delivery method that notification has to have
+     *
+     * @return      auth_user
+     */
+    static public function loadById($pdo, $id)
+    {
+        return self::loadBy($pdo, [
+            'id' => $id,
+        ]);
+    }
+    // }}}
     // {{{ loadBySid()
     /**
      * gets a notifications by sid for a specific user
@@ -91,6 +111,21 @@ class Notification extends \Depage\Entity\PdoEntity
         ]);
     }
     // }}}
+    // {{{ loadByDelivery()
+    /**
+     * gets a notifications by delivery for all users
+     *
+     * @public
+     *
+     * @param       Depage\Db\Pdo     $pdo        pdo object for database access
+     * @param       String            $tag        tag with which to filter the notifications. SQL wildcards % and _ are allowed to match substrings.
+     */
+    static public function loadByDelivery($pdo, $delivery) {
+        return self::loadBy($pdo, [
+            'delivery' => $delivery,
+        ]);
+    }
+    // }}}
     // {{{ loadBy()
     /**
      * @brief loadBy
@@ -109,6 +144,9 @@ class Notification extends \Depage\Entity\PdoEntity
         $join = "";
 
         // extract where part of query
+        if (isset($search['id'])) {
+            $where[] = self::sqlConditionFor('n.id', $search['id'], $params);
+        }
         if (isset($search['sid'])) {
             $where[] = "(n.sid = :sid1 OR
                 (s.sid = :sid2 AND n.uid = s.userId))";
@@ -144,7 +182,6 @@ class Notification extends \Depage\Entity\PdoEntity
             $where
             $groupBy
             $orderBy";
-        echo(htmlspecialchars($sql));
         $query = $pdo->prepare($sql);
         $query->execute($params);
 
@@ -324,6 +361,11 @@ class Notification extends \Depage\Entity\PdoEntity
 
             if ($success) {
                 $this->dirty = array_fill_keys(array_keys(static::$fields), false);
+            }
+
+            if (in_array("mail", $this->delivery)) {
+                $delivery = new \Depage\Notifications\MailDelivery($this->pdo, "notifications@scriptdock.de");
+                $delivery->addDeliveryTask();
             }
         }
     }
