@@ -120,10 +120,10 @@ class Notification extends \Depage\Entity\PdoEntity
      * @param       Depage\Db\Pdo     $pdo        pdo object for database access
      * @param       String            $tag        tag with which to filter the notifications. SQL wildcards % and _ are allowed to match substrings.
      */
-    static public function loadByDelivery($pdo, $delivery) {
+    static public function loadByDelivery($pdo, $delivery, $count = null) {
         return self::loadBy($pdo, [
             'delivery' => $delivery,
-        ]);
+        ], [], $count);
     }
     // }}}
     // {{{ loadBy()
@@ -133,7 +133,7 @@ class Notification extends \Depage\Entity\PdoEntity
      * @param mixed $param
      * @return void
      **/
-    static public function loadBy($pdo, Array $search, Array $order = [])
+    static public function loadBy($pdo, Array $search, Array $order = [], $limit = "")
     {
         $notifications = [];
         $fields = "n." . implode(", n.", self::getFields());
@@ -169,6 +169,10 @@ class Notification extends \Depage\Entity\PdoEntity
             $where = "";
         };
 
+        if (!empty($limit)) {
+            $limit = "LIMIT $limit";
+        }
+
         // extract order part of query
         if (!empty($order)) {
             $orderBy = "ORDER BY " . implode(", ", $order);
@@ -181,7 +185,8 @@ class Notification extends \Depage\Entity\PdoEntity
                 $join
             $where
             $groupBy
-            $orderBy";
+            $orderBy
+            $limit";
         $query = $pdo->prepare($sql);
         $query->execute($params);
 
@@ -365,7 +370,7 @@ class Notification extends \Depage\Entity\PdoEntity
 
             if (in_array("mail", $this->delivery)) {
                 $delivery = new \Depage\Notifications\MailDelivery($this->pdo, "notifications@scriptdock.de");
-                $delivery->addDeliveryTask($this->id);
+                $delivery->addDeliveryTask();
             }
         }
     }

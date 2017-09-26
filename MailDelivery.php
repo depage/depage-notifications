@@ -37,11 +37,11 @@ class MailDelivery
      * @param mixed
      * @return void
      **/
-    public function addDeliveryTask($notificationId)
+    public function addDeliveryTask()
     {
         $task = \Depage\Tasks\Task::loadOrCreate($this->pdo, "Depage Notification Delivery");
 
-        $task->addSubtask("delivering", "\$d = %s; \$d->deliver(%s);", [$this, $notificationId]);
+        $task->addSubtask("delivering", "\$d = %s; \$d->deliver();", [$this]);
         $task->begin();
     }
     // }}}
@@ -52,9 +52,9 @@ class MailDelivery
      * @param mixed
      * @return void
      **/
-    public function deliver($id)
+    public function deliver()
     {
-        $notifications = \Depage\Notifications\Notification::loadById($this->pdo, $id);
+        $notifications = \Depage\Notifications\Notification::loadByDelivery($this->pdo, "mail", 10);
 
         foreach($notifications as $n) {
             if (!empty($n->uid)) {
@@ -106,6 +106,9 @@ class MailDelivery
             $n->delivered("mail");
         }
 
+        if (count($notifications) > 0) {
+            $this->addDeliveryTask();
+        }
     }
     // }}}
 }
