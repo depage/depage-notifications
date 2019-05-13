@@ -64,7 +64,9 @@ class MailDelivery
             } else {
                 continue;
             }
+
             $to = $user->email;
+            \Depage\Intl\Intl::setLocale($user->lang);
 
             $opt = $n->options;
 
