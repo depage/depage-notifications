@@ -54,6 +54,19 @@ class Notification extends \Depage\Entity\PdoEntity
     }
     // }}}
 
+    // {{{ create()
+    /**
+     * @brief create
+     *
+     * @param mixed $pdo
+     * @return void
+     **/
+    public static function create($pdo)
+    {
+        return new self($pdo);
+    }
+    // }}}
+
     // {{{ loadById()
     /**
      * gets a notifications by sid for a specific user
@@ -164,7 +177,7 @@ class Notification extends \Depage\Entity\PdoEntity
         }
 
         if (!empty($where)) {
-            $where = "WHERE " . implode($where, " AND ");
+            $where = "WHERE " . implode(" AND ", $where);
         } else {
             $where = "";
         };
@@ -220,6 +233,8 @@ class Notification extends \Depage\Entity\PdoEntity
             $this->data['options'] = serialize($param);
             $this->dirty['options'] = true;
         }
+
+        return $this;
     }
     // }}}
     // {{{ getOptions()
@@ -251,9 +266,14 @@ class Notification extends \Depage\Entity\PdoEntity
         if (!$this->initialized) {
             $this->data['delivery'] = $param;
         } else {
+            if (!is_array($param)) {
+                $param = [$param];
+            }
             $this->data['delivery'] = "," . implode(",", $param) . ",";
             $this->dirty['delivery'] = true;
         }
+
+        return $this;
     }
     // }}}
     // {{{ getDelivery()
